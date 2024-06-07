@@ -3,30 +3,36 @@ from rest_framework.response import Response
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from rest_framework.authentication import BasicAuthentication
-from rest_framework.permissions import IsAuthenticated
-from .serializers import UserSerializer
+from rest_framework.permissions import IsAuthenticated,AllowAny
+from .serializers import UserSerializer, SummarizeTextSerializer
 import requests
+from rest_framework.views import APIView
+
+
 
 class RegisterUser(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
-class LoginUser(generics.CreateAPIView):
+class LoginUser(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request, *args, **kwargs):
         username = request.data.get('username', '')
         password = request.data.get('password', '')
-        
+
         if not username or not password:
-            return Response({"error": "Invalid username or password"}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "Username and password are required"}, status=status.HTTP_400_BAD_REQUEST)
+
         user = authenticate(username=username, password=password)
-        
+
         if user is not None:
             login(request, user)
             return Response({"message": "Login successful"}, status=status.HTTP_200_OK)
-        return Response({"error": "Invalid username or password"}, status=status.HTTP_401_UNAUTHORIZED)
+        else:
+            return Response({"error": "Invalid username or password"}, status=status.HTTP_401_UNAUTHORIZED)
 
-class LogoutUser(generics.GenericAPIView):
+class LogoutUser(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -55,11 +61,15 @@ class FindUsers(generics.ListAPIView):
             email__icontains=search_term)
 
 class SummarizeText(generics.CreateAPIView):
+    serializer_class = SummarizeTextSerializer
+
     def post(self, request, *args, **kwargs):
-        text = request.data.get('text', '')
-        if not text:
-            return Response({"error": "No text provided"}, status=status.HTTP_400_BAD_REQUEST)
-    
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        text = serializer.validated_data.get('text')
+
         API_URL = 'https://api.meaningcloud.com/summarization-1.0'
         headers = {'Authorization': 'Bearer 196da8a772244b9cf724d75279c9681d'}
         
